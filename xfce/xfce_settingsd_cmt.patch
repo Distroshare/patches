@@ -1,0 +1,126 @@
+diff -urN xfce4-settings-4.12.0/xfsettingsd/pointers.c xfce4-settings-4.12.1/xfsettingsd/pointers.c
+--- xfce4-settings-4.12.0/xfsettingsd/pointers.c	2015-02-26 04:45:08.000000000 -0700
++++ xfce4-settings-4.12.1/xfsettingsd/pointers.c	2015-07-03 10:51:04.138497752 -0600
+@@ -203,7 +203,7 @@
+ 
+ 
+ 
+-#ifdef HAVE_LIBINPUT
++#if defined(HAVE_LIBINPUT) || defined(HAVE_CMT)
+ static gboolean
+ xfce_pointers_is_enabled (Display *xdisplay,
+                           XDevice *device)
+@@ -229,9 +229,9 @@
+ 
+     return FALSE;
+ }
++#endif /* HAVE_LIBINPUT || HAVE_LIBGUESTURES*/
+ 
+-
+-
++#ifdef HAVE_LIBINPUT
+ static gboolean
+ xfce_pointers_is_libinput (Display *xdisplay,
+                            XDevice *device)
+@@ -257,6 +257,32 @@
+ }
+ #endif /* HAVE_LIBINPUT */
+ 
++#ifdef HAVE_CMT
++static gboolean
++xfce_pointers_is_libgestures (Display *xdisplay,
++			      XDevice *device)
++{
++    Atom     prop, type;
++    gulong   n_items, bytes_after;
++    gint     rc, format;
++    guchar  *data;
++
++    prop = XInternAtom (xdisplay, LIBGESTURES_PROP_SENSITIVITY, False);
++    gdk_error_trap_push ();
++    rc = XGetDeviceProperty (xdisplay, device, prop, 0, 1, False,
++                             XA_INTEGER, &type, &format, &n_items,
++                             &bytes_after, &data);
++    gdk_error_trap_pop ();
++    if (rc == Success)
++    {
++        XFree (data);
++        return (n_items > 0);
++    }
++
++    return FALSE;
++}
++#endif /* HAVE_CMT */
++
+ 
+ 
+ static void
+@@ -453,6 +479,23 @@
+     }
+ #endif /* HAVE_LIBINPUT */
+ 
++#ifdef HAVE_CMT
++    if (xfce_pointers_is_libgestures (xdisplay, device))
++    {
++        if (reverse_scrolling != -1)
++        {
++            GValue value = G_VALUE_INIT;
++
++            g_value_init (&value, G_TYPE_INT);
++            g_value_set_int (&value, reverse_scrolling);
++
++            xfce_pointers_helper_change_property (device_info, device, xdisplay,
++                                                  LIBGESTURES_PROP_AUSTRALIAN_SCROLL,
++						  &value);
++        }
++    }
++#endif /* HAVE_CMT */
++
+     /* search the number of buttons */
+     for (n = 0, ptr = device_info->inputclassinfo; n < device_info->num_classes; n++)
+     {
+@@ -577,6 +620,23 @@
+         return;
+     }
+ #endif /* HAVE_LIBINPUT */
++#ifdef HAVE_CMT
++    if (xfce_pointers_is_libgestures (xdisplay, device))
++    {
++        int gestures_accel;
++        GValue value = G_VALUE_INIT;
++
++        gestures_accel = CLAMP (threshold, 1, 5);
++        g_value_init (&value, G_TYPE_INT);
++        g_value_set_int (&value, gestures_accel);
++
++        xfce_pointers_helper_change_property (device_info, device, xdisplay,
++                                              LIBGESTURES_PROP_SENSITIVITY,
++					      &value);
++        return;
++    }
++#endif /* HAVE_CMT */
++
+     /* get the feedback states for this device */
+     gdk_error_trap_push ();
+     states = XGetFeedbackControl (xdisplay, device, &num_feedbacks);
+@@ -771,7 +831,7 @@
+     if (prop == None)
+         return;
+ 
+-#ifdef HAVE_LIBINPUT
++#if defined(HAVE_LIBINPUT) || defined(HAVE_CMT)
+     /*
+      * libinput cannot change properties on disabled devices
+      * see: https://bugs.freedesktop.org/show_bug.cgi?id=89296
+diff -urN xfce4-settings-4.12.0/xfsettingsd/pointers.h xfce4-settings-4.12.1/xfsettingsd/pointers.h
+--- xfce4-settings-4.12.0/xfsettingsd/pointers.h	2015-02-23 18:33:11.000000000 -0700
++++ xfce4-settings-4.12.1/xfsettingsd/pointers.h	2015-07-03 10:44:03.960321131 -0600
+@@ -19,6 +19,9 @@
+ #ifndef __POINTERS_H__
+ #define __POINTERS_H__
+ 
++#define LIBGESTURES_PROP_SENSITIVITY "Pointer Sensitivity"
++#define LIBGESTURES_PROP_AUSTRALIAN_SCROLL "Australian Scrolling"
++
+ typedef struct _XfcePointersHelperClass XfcePointersHelperClass;
+ typedef struct _XfcePointersHelper      XfcePointersHelper;

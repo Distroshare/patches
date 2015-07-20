@@ -8,7 +8,7 @@
  
      if ( LOGIND_RUNNING() )
      {
-@@ -335,8 +336,16 @@
+@@ -335,8 +336,18 @@
                LOGIND_HANDLE_LID_SWITCH, &logind_handle_lid_switch,
                NULL);
  
@@ -20,6 +20,8 @@
 +
 +            if (lock_screen && lid_is_closed)
 +	  	    xfpm_lock_screen ();
++            else if (lock_screen)
++                    XResetScreenSaver (gdk_x11_get_default_xdisplay ());
 +
              return;
 +        }
